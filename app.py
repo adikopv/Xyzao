@@ -6,7 +6,6 @@ import random
 import string
 from typing import Any, Dict, Optional, Tuple
 from datetime import datetime
-from urllib.parse import unquote
 
 app = Flask(__name__)
 
@@ -212,7 +211,7 @@ def register_new_user(session: requests.Session, headers: Dict[str, str], email:
 
 def validate_email_format(email: str) -> bool:
     """Validate email format."""
-    email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-z]{2,}$'
+    email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
     return bool(re.match(email_pattern, email))
 
 def get_current_time_str() -> str:
@@ -298,131 +297,7 @@ def fetch_bin_info(bin_number: str) -> Dict[str, Any]:
             "error": f"Unexpected error: {str(e)}"
         }
 
-# FIXED ROUTE: Using path: converter and URL decoding
-@app.route('/add_payment_method/<path:details>', methods=['GET'])
-def add_payment_method_auto_email(details: str) -> Response:
-    """Automatically generate email and add payment method with BIN lookup."""
-    start_time = get_current_time_str()
-    bin_lookup_time = None
-    bin_info = None
-    
-    try:
-        # URL decode the details parameter (handles %7C for | character)
-        details = unquote(details)
-        print(f"DEBUG: Received details: {details}")
-        
-        # Generate random email
-        email = generate_random_email()
-        print(f"Generated email: {email}")
-        
-        # Extract card details from URL path
-        parts = details.split('|')
-        print(f"DEBUG: Split parts: {parts}")
-        print(f"DEBUG: Number of parts: {len(parts)}")
-        
-        if len(parts) != 4:
-            end_time = get_current_time_str()
-            return jsonify({
-                'error': f'Invalid card details format. Use cc|mm|yy|cvv. Got {len(parts)} parts instead of 4.',
-                'details_received': details,
-                'parts': parts,
-                'Time': calculate_time_taken(start_time, end_time)
-            }), 400
-        
-        cc, mm, yy, cvv = parts
-        if not all([cc, mm, yy, cvv]):
-            end_time = get_current_time_str()
-            return jsonify({
-                'error': 'Missing required card details',
-                'cc': cc,
-                'mm': mm,
-                'yy': yy,
-                'cvv': cvv,
-                'Time': calculate_time_taken(start_time, end_time)
-            }), 400
-        
-        # Perform BIN lookup (extract first 6 digits)
-        bin_number = cc[:6] if len(cc) >= 6 else cc
-        bin_lookup_start = get_current_time_str()
-        bin_info = fetch_bin_info(bin_number)
-        bin_lookup_end = get_current_time_str()
-        bin_lookup_time = calculate_time_taken(bin_lookup_start, bin_lookup_end)
-        
-        # Continue with payment method addition
-        return _add_payment_method_with_email_and_bin(email, details, start_time, bin_info, bin_lookup_time)
-        
-    except Exception as e:
-        end_time = get_current_time_str()
-        response_data = {
-            'error': str(e), 
-            'Time': calculate_time_taken(start_time, end_time)
-        }
-        if bin_info:
-            response_data['bin_lookup'] = bin_info
-        if bin_lookup_time:
-            response_data['bin_lookup_time'] = bin_lookup_time
-        return jsonify(response_data), 500
-
-# FIXED ROUTE: Using path: converter and URL decoding
-@app.route('/add_payment_method_with_email/<email>/<path:details>', methods=['GET'])
-def add_payment_method_with_email(email: str, details: str) -> Response:
-    """Add payment method with provided email and include BIN lookup."""
-    start_time = get_current_time_str()
-    bin_lookup_time = None
-    bin_info = None
-    
-    try:
-        # URL decode the parameters
-        email = unquote(email)
-        details = unquote(details)
-        
-        # Validate email format
-        if not validate_email_format(email):
-            end_time = get_current_time_str()
-            return jsonify({
-                'error': 'Invalid email format', 
-                'Time': calculate_time_taken(start_time, end_time)
-            }), 400
-        
-        # Extract card details from URL path
-        parts = details.split('|')
-        if len(parts) != 4:
-            end_time = get_current_time_str()
-            return jsonify({
-                'error': 'Invalid card details format. Use cc|mm|yy|cvv',
-                'Time': calculate_time_taken(start_time, end_time)
-            }), 400
-        
-        cc, mm, yy, cvv = parts
-        if not all([cc, mm, yy, cvv]):
-            end_time = get_current_time_str()
-            return jsonify({
-                'error': 'Missing required card details',
-                'Time': calculate_time_taken(start_time, end_time)
-            }), 400
-        
-        # Perform BIN lookup (extract first 6 digits)
-        bin_number = cc[:6] if len(cc) >= 6 else cc
-        bin_lookup_start = get_current_time_str()
-        bin_info = fetch_bin_info(bin_number)
-        bin_lookup_end = get_current_time_str()
-        bin_lookup_time = calculate_time_taken(bin_lookup_start, bin_lookup_end)
-        
-        # Continue with payment method addition
-        return _add_payment_method_with_email_and_bin(email, details, start_time, bin_info, bin_lookup_time)
-        
-    except Exception as e:
-        end_time = get_current_time_str()
-        response_data = {
-            'error': str(e), 
-            'Time': calculate_time_taken(start_time, end_time)
-        }
-        if bin_info:
-            response_data['bin_lookup'] = bin_info
-        if bin_lookup_time:
-            response_data['bin_lookup_time'] = bin_lookup_time
-        return jsonify(response_data), 500
-
+# THIS FUNCTION MUST BE DEFINED BEFORE THE ROUTES THAT USE IT
 def _add_payment_method_with_email_and_bin(email: str, details: str, start_time: str, 
                                           bin_info: Optional[Dict[str, Any]] = None, 
                                           bin_lookup_time: Optional[str] = None) -> Response:
@@ -430,6 +305,18 @@ def _add_payment_method_with_email_and_bin(email: str, details: str, start_time:
     try:
         # Extract card details from URL path
         parts = details.split('|')
+        if len(parts) != 4:
+            end_time = get_current_time_str()
+            response_data = {
+                'error': 'Invalid card details format. Use cc|mm|yy|cvv',
+                'Time': calculate_time_taken(start_time, end_time)
+            }
+            if bin_info:
+                response_data['bin_lookup'] = bin_info
+            if bin_lookup_time:
+                response_data['bin_lookup_time'] = bin_lookup_time
+            return jsonify(response_data), 400
+            
         cc, mm, yy, cvv = parts
 
         # Create a session to persist cookies across requests
@@ -636,6 +523,113 @@ def _add_payment_method_with_email_and_bin(email: str, details: str, start_time:
             response_data['bin_lookup_time'] = bin_lookup_time
         return jsonify(response_data), 500
 
+# ROUTES START HERE - CRITICAL: The function above must be defined before these routes
+@app.route('/add_payment_method/<details>', methods=['GET'])
+def add_payment_method_auto_email(details: str) -> Response:
+    """Automatically generate email and add payment method with BIN lookup."""
+    start_time = get_current_time_str()
+    bin_lookup_time = None
+    bin_info = None
+    
+    try:
+        # Generate random email
+        email = generate_random_email()
+        print(f"Generated email: {email}")
+        
+        # Extract card details from URL path
+        parts = details.split('|')
+        if len(parts) != 4:
+            end_time = get_current_time_str()
+            return jsonify({
+                'error': 'Invalid card details format. Use cc|mm|yy|cvv',
+                'Time': calculate_time_taken(start_time, end_time)
+            }), 400
+        
+        cc, mm, yy, cvv = parts
+        if not all([cc, mm, yy, cvv]):
+            end_time = get_current_time_str()
+            return jsonify({
+                'error': 'Missing required card details',
+                'Time': calculate_time_taken(start_time, end_time)
+            }), 400
+        
+        # Perform BIN lookup (extract first 6 digits)
+        bin_number = cc[:6] if len(cc) >= 6 else cc
+        bin_lookup_start = get_current_time_str()
+        bin_info = fetch_bin_info(bin_number)
+        bin_lookup_end = get_current_time_str()
+        bin_lookup_time = calculate_time_taken(bin_lookup_start, bin_lookup_end)
+        
+        # Continue with payment method addition
+        return _add_payment_method_with_email_and_bin(email, details, start_time, bin_info, bin_lookup_time)
+        
+    except Exception as e:
+        end_time = get_current_time_str()
+        response_data = {
+            'error': str(e), 
+            'Time': calculate_time_taken(start_time, end_time)
+        }
+        if bin_info:
+            response_data['bin_lookup'] = bin_info
+        if bin_lookup_time:
+            response_data['bin_lookup_time'] = bin_lookup_time
+        return jsonify(response_data), 500
+
+@app.route('/add_payment_method_with_email/<email>/<details>', methods=['GET'])
+def add_payment_method_with_email(email: str, details: str) -> Response:
+    """Add payment method with provided email and include BIN lookup."""
+    start_time = get_current_time_str()
+    bin_lookup_time = None
+    bin_info = None
+    
+    try:
+        # Validate email format
+        if not validate_email_format(email):
+            end_time = get_current_time_str()
+            return jsonify({
+                'error': 'Invalid email format', 
+                'Time': calculate_time_taken(start_time, end_time)
+            }), 400
+        
+        # Extract card details from URL path
+        parts = details.split('|')
+        if len(parts) != 4:
+            end_time = get_current_time_str()
+            return jsonify({
+                'error': 'Invalid card details format. Use cc|mm|yy|cvv',
+                'Time': calculate_time_taken(start_time, end_time)
+            }), 400
+        
+        cc, mm, yy, cvv = parts
+        if not all([cc, mm, yy, cvv]):
+            end_time = get_current_time_str()
+            return jsonify({
+                'error': 'Missing required card details',
+                'Time': calculate_time_taken(start_time, end_time)
+            }), 400
+        
+        # Perform BIN lookup (extract first 6 digits)
+        bin_number = cc[:6] if len(cc) >= 6 else cc
+        bin_lookup_start = get_current_time_str()
+        bin_info = fetch_bin_info(bin_number)
+        bin_lookup_end = get_current_time_str()
+        bin_lookup_time = calculate_time_taken(bin_lookup_start, bin_lookup_end)
+        
+        # Continue with payment method addition
+        return _add_payment_method_with_email_and_bin(email, details, start_time, bin_info, bin_lookup_time)
+        
+    except Exception as e:
+        end_time = get_current_time_str()
+        response_data = {
+            'error': str(e), 
+            'Time': calculate_time_taken(start_time, end_time)
+        }
+        if bin_info:
+            response_data['bin_lookup'] = bin_info
+        if bin_lookup_time:
+            response_data['bin_lookup_time'] = bin_lookup_time
+        return jsonify(response_data), 500
+
 @app.route('/register_user', methods=['GET'])
 def register_user_auto() -> Response:
     """Endpoint to register a random user with email only."""
@@ -696,7 +690,6 @@ def register_user_with_email(email: str) -> Response:
     """Endpoint to register a user with specific email only."""
     start_time = get_current_time_str()
     try:
-        email = unquote(email)
         if not validate_email_format(email):
             end_time = get_current_time_str()
             return jsonify({
@@ -777,7 +770,6 @@ def bin_lookup(bin_number: str) -> Response:
     """
     start_time = get_current_time_str()
     try:
-        bin_number = unquote(bin_number)
         # Fetch BIN information
         bin_info = fetch_bin_info(bin_number)
         end_time = get_current_time_str()
@@ -799,7 +791,7 @@ def bin_lookup(bin_number: str) -> Response:
             'Time': calculate_time_taken(start_time, end_time)
         }), 500
 
-@app.route('/bin_lookup_from_card/<path:card_details>', methods=['GET'])
+@app.route('/bin_lookup_from_card/<card_details>', methods=['GET'])
 def bin_lookup_from_card(card_details: str) -> Response:
     """
     Extract BIN from full card details and fetch information.
@@ -809,7 +801,6 @@ def bin_lookup_from_card(card_details: str) -> Response:
     """
     start_time = get_current_time_str()
     try:
-        card_details = unquote(card_details)
         # Parse card details
         parts = card_details.split('|')
         if len(parts) < 1:
@@ -855,20 +846,6 @@ def bin_lookup_from_card(card_details: str) -> Response:
             'card_details_provided': card_details,
             'Time': calculate_time_taken(start_time, end_time)
         }), 500
-
-# Debug endpoint to test URL parsing
-@app.route('/debug/<path:details>', methods=['GET'])
-def debug_details(details: str) -> Response:
-    """Debug endpoint to see what Flask is receiving"""
-    decoded = unquote(details)
-    return jsonify({
-        'received_raw': details,
-        'received_decoded': decoded,
-        'length': len(decoded),
-        'split_by_pipe': decoded.split('|'),
-        'parts_count': len(decoded.split('|')),
-        'raw_representation': repr(details)
-    })
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)
